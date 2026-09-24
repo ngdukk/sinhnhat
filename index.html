@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HAPPY BIRTHDAY QUANH - Deep Glass Galaxy 3D</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #010003;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+        }
+        #webgl-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* Viền Đèn LED Neon Glass */
+        .neon-border {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            pointer-events: none;
+            z-index: 99;
+            box-shadow: inset 0 0 50px rgba(255, 0, 128, 0.5), inset 0 0 20px rgba(0, 255, 255, 0.3);
+            border: 2px solid transparent;
+            border-image: linear-gradient(45deg, #ff007f, #00ffff, #ff00ff, #00ffaa) 1;
+            animation: neonGlow 4s linear infinite;
+        }
+
+        @keyframes neonGlow {
+            0% { filter: hue-rotate(0deg); }
+            100% { filter: hue-rotate(360deg); }
+        }
+
+        .hint-box {
+            position: absolute;
+            bottom: 25px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            background: rgba(12, 8, 20, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            padding: 12px 30px;
+            border-radius: 30px;
+            font-size: 0.9rem;
+            color: #ffffff;
+            pointer-events: none;
+            box-shadow: 0 8px 32px 0 rgba(255, 0, 128, 0.4);
+            text-align: center;
+            font-weight: 600;
+            letter-spacing: 0.8px;
+            text-shadow: 0 0 10px rgba(255, 0, 255, 0.8);
+        }
+
+        /* Nút Bật/Tắt Nhạc Neon */
+        .music-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            background: rgba(12, 8, 20, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 255, 255, 0.5);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .music-btn:hover {
+            background: rgba(255, 0, 128, 0.8);
+            box-shadow: 0 0 20px rgba(255, 0, 128, 0.6);
+            border-color: #ff00ff;
+        }
+    </style>
+
+    <!-- Thư viện Three.js, OrbitControls & GSAP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+</head>
+<body>
+
+    <div class="neon-border"></div>
+    <div id="webgl-container"></div>
+
+    <button id="music-toggle" class="music-btn">🎵 Bật nhạc</button>
+
+    <div class="hint-box">
+        💖 ✨ HAPPY BIRTHDAY QUANH ✨ 💖 <br>
+        <span style="font-size: 0.8rem; color: #00ffff; font-weight: normal;">🖱️ Click vào Trái Tim ở xa để phóng to | Click khoảng không để thu nhỏ về vị trí cũ</span>
+    </div>
+
+    <!-- Nhạc nền Sinh Nhật (Bạn có thể thay URL bài nhạc tùy thích ở thẻ src) -->
+    <audio id="bg-music" loop src="sn.mp3"></audio>
+
+    <script>
+        // =========================================================================
+        // 🔊 XỬ LÝ ÂM THANH (NHẠC NỀN & HIỆU ỨNG CLICK)
+        // =========================================================================
+        const bgMusic = document.getElementById('bg-music');
+        const musicBtn = document.getElementById('music-toggle');
+        let musicStarted = false;
+
+        // Tạo hiệu ứng tiếng Click bằng Web Audio API
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playClickSound() {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(300, audioCtx.currentTime + 0.05);
+            
+            gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+            
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.05);
+        }
+
+        // Tự động bật nhạc ở tương tác đầu tiên của người dùng
+        function startMusicOnFirstInteraction() {
+            if (!musicStarted) {
+                bgMusic.play().then(() => {
+                    musicStarted = true;
+                    musicBtn.innerHTML = "🎶 Tắt nhạc";
+                }).catch(() => {});
+            }
+        }
+
+        musicBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            playClickSound();
+            if (bgMusic.paused) {
+                bgMusic.play();
+                musicBtn.innerHTML = "🎶 Tắt nhạc";
+                musicStarted = true;
+            } else {
+                bgMusic.pause();
+                musicBtn.innerHTML = "🎵 Bật nhạc";
+            }
+        });
+
+        // =========================================================================
+        // 🌟 DANH SÁCH ẢNH CỦA BẠN:
+        // =========================================================================
+
+        const centerImageUrl = "13.jpg";
+
+        const myPhotos = [
+            "1.jpg", 
+            "2.jpg", 
+            "3.jpg", 
+            "4.jpg", 
+            "5.jpg",
+            "6.jpg", 
+            "7.jpg", 
+            "8.jpg", 
+            "9.jpg", 
+            "10.jpg",
+            "11.jpg", 
+            "12.jpg", 
+            "13.jpg", 
+            "14.jpg", 
+            "15.jpg",
+            "16.jpg", 
+            "17.jpg", 
+            "18.jpg", 
+            "19.jpg", 
+            "20.jpg",
+            "21.jpg", 
+            "22.jpg", 
+            "23.jpg", 
+            "24.jpg", 
+            "25.jpg",
+            "26.jpg", 
+            "27.jpg", 
+            "28.jpg", 
+            "29.jpg", 
+            "30.jpg",
+            "31.jpg", 
+            "32.jpg", 
+            "33.jpg",
+        ];
+
+        // =========================================================================
+        // KHỞI TẠO VŨ TRỤ DEEP GALAXY 3D
+        // =========================================================================
+
+        const imageUrlList = [];
+        const targetTotal = 40;
+        for (let i = 0; i < targetTotal; i++) {
+            if (myPhotos.length > 0) {
+                imageUrlList.push(myPhotos[i % myPhotos.length]);
+            } else {
+                imageUrlList.push(`https://picsum.photos/id/${10 + (i * 3)}/600/600`);
+            }
+        }
+
+        const container = document.getElementById('webgl-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x010003, 0.00025);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 6000);
+        
+        const defaultCamPos = new THREE.Vector3(0, 80, 900);
+        const defaultTarget = new THREE.Vector3(0, 0, 0);
+        camera.position.copy(defaultCamPos);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.3;
+        container.appendChild(renderer.domElement);
+
+        // --- BỘ DI CHUYỂN 360 ĐỘ (ORBIT CONTROLS) ---
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.rotateSpeed = 0.8;
+        controls.zoomSpeed = 1.2;
+        controls.minDistance = 60;
+        controls.maxDistance = 3500;
+
+        // --- ÁNH SÁNG MÔI TRƯỜNG ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+        scene.add(ambientLight);
+
+        const pinkNeonLight = new THREE.PointLight(0xff007f, 3.5, 2000);
+        pinkNeonLight.position.set(500, 500, 500);
+        scene.add(pinkNeonLight);
+
+        const cyanNeonLight = new THREE.PointLight(0x00ffff, 3.5, 2000);
+        cyanNeonLight.position.set(-500, -500, -500);
+        scene.add(cyanNeonLight);
+
+        // --- HẠT SAO VŨ TRỤ ---
+        const starsGeometry = new THREE.BufferGeometry();
+        const starsCount = 12000;
+        const starPositions = new Float32Array(starsCount * 3);
+        const starColors = new Float32Array(starsCount * 3);
+
+        for (let i = 0; i < starsCount * 3; i += 3) {
+            starPositions[i] = (Math.random() - 0.5) * 5000;
+            starPositions[i + 1] = (Math.random() - 0.5) * 5000;
+            starPositions[i + 2] = (Math.random() - 0.5) * 5000;
+
+            const colorType = Math.random();
+            if (colorType > 0.6) {
+                starColors[i] = 1.0; starColors[i+1] = 0.0; starColors[i+2] = 0.5;
+            } else if (colorType > 0.3) {
+                starColors[i] = 0.0; starColors[i+1] = 1.0; starColors[i+2] = 1.0;
+            } else {
+                starColors[i] = 1.0; starColors[i+1] = 1.0; starColors[i+2] = 1.0;
+            }
+        }
+
+        starsGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        starsGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+
+        const starsMaterial = new THREE.PointsMaterial({
+            size: 2.5,
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.85
+        });
+        const starField = new THREE.Points(starsGeometry, starsMaterial);
+        scene.add(starField);
+
+        // --- ✨ CHỮ NEON "HAPPY BIRTHDAY QUANH" XOAY 3D ✨ ---
+        const textOrbitGroup = new THREE.Group();
+        scene.add(textOrbitGroup);
+
+        function createNeonTextTexture(text) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.shadowColor = '#ff007f';
+            ctx.shadowBlur = 25;
+            ctx.font = 'bold 75px "Segoe UI", Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            ctx.fillStyle = '#ff1493';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+            ctx.shadowBlur = 10;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        const textTexture = createNeonTextTexture("✨ HAPPY BIRTHDAY QUANH ✨");
+        const textCount = 4;
+        const textRadius = 260;
+
+        for (let i = 0; i < textCount; i++) {
+            const textGeo = new THREE.PlaneGeometry(240, 60);
+            const textMat = new THREE.MeshBasicMaterial({
+                map: textTexture,
+                side: THREE.DoubleSide,
+                transparent: true
+            });
+            const textMesh = new THREE.Mesh(textGeo, textMat);
+
+            const angle = (i / textCount) * Math.PI * 2;
+            textMesh.position.x = Math.cos(angle) * textRadius;
+            textMesh.position.y = 120;
+            textMesh.position.z = Math.sin(angle) * textRadius;
+            textMesh.rotation.y = -angle + Math.PI / 2;
+
+            textOrbitGroup.add(textMesh);
+        }
+
+        // --- DẢI ĐÈN NEON UỐN LƯỢN ---
+        const neonCurvesGroup = new THREE.Group();
+        scene.add(neonCurvesGroup);
+
+        function createNeonTube(color, radiusX, radiusZ, height) {
+            const curvePoints = [];
+            for (let i = 0; i <= 100; i++) {
+                const theta = (i / 100) * Math.PI * 2;
+                const x = Math.cos(theta) * radiusX;
+                const z = Math.sin(theta) * radiusZ;
+                const y = Math.sin(theta * 4) * height;
+                curvePoints.push(new THREE.Vector3(x, y, z));
+            }
+            const curve = new THREE.CatmullRomCurve3(curvePoints);
+            const tubeGeo = new THREE.TubeGeometry(curve, 140, 3.5, 8, true);
+            const tubeMat = new THREE.MeshStandardMaterial({
+                color: color,
+                emissive: color,
+                emissiveIntensity: 2.8,
+                roughness: 0.1,
+                metalness: 0.8
+            });
+            return new THREE.Mesh(tubeGeo, tubeMat);
+        }
+
+        const pinkTube = createNeonTube(0xff007f, 600, 600, 90);
+        const cyanTube = createNeonTube(0x00ffff, 850, 850, 130);
+        cyanTube.rotation.x = Math.PI / 3;
+        neonCurvesGroup.add(pinkTube);
+        neonCurvesGroup.add(cyanTube);
+
+        // --- CẮT TẤM ẢNH LIQUID GLASS ---
+        function createGlassHeartTexture(imageObj, isCenter = false) {
+            const canvas = document.createElement('canvas');
+            const size = 512;
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+
+            ctx.clearRect(0, 0, size, size);
+
+            function drawHeart(c, x, y, w, h) {
+                c.beginPath();
+                c.moveTo(x, y + h / 4);
+                c.quadraticCurveTo(x, y, x + w / 4, y);
+                c.quadraticCurveTo(x + w / 2, y, x + w / 2, y + h / 4);
+                c.quadraticCurveTo(x + w / 2, y, x + (w * 3) / 4, y);
+                c.quadraticCurveTo(x + w, y, x + w, y + h / 4);
+                c.quadraticCurveTo(x + w, y + h / 2, x + (w * 3) / 4, y + (h * 3) / 4);
+                c.lineTo(x + w / 2, y + h);
+                c.lineTo(x + w / 4, y + (h * 3) / 4);
+                c.quadraticCurveTo(x, y + h / 2, x, y + h / 4);
+                c.closePath();
+            }
+
+            const grad = ctx.createLinearGradient(0, 0, size, size);
+            grad.addColorStop(0, '#ff007f');
+            grad.addColorStop(0.5, '#00ffff');
+            grad.addColorStop(1, '#ff00ff');
+
+            ctx.shadowColor = isCenter ? '#00ffff' : '#ff007f';
+            ctx.shadowBlur = isCenter ? 45 : 25;
+            ctx.fillStyle = grad;
+            drawHeart(ctx, 15, 15, size - 30, size - 30);
+            ctx.fill();
+
+            ctx.save();
+            ctx.shadowBlur = 0;
+            drawHeart(ctx, 28, 28, size - 56, size - 56);
+            ctx.clip();
+
+            const imgAspect = (imageObj.width || 1) / (imageObj.height || 1);
+            let drawW = size - 56;
+            let drawH = (size - 56) / imgAspect;
+            if (drawH < size - 56) {
+                drawH = size - 56;
+                drawW = (size - 56) * imgAspect;
+            }
+            const drawX = 28 - (drawW - (size - 56)) / 2;
+            const drawY = 28 - (drawH - (size - 56)) / 2;
+
+            ctx.drawImage(imageObj, drawX, drawY, drawW, drawH);
+            ctx.restore();
+
+            ctx.save();
+            drawHeart(ctx, 28, 28, size - 56, size - 56);
+            ctx.clip();
+            const glassGrad = ctx.createLinearGradient(0, 0, size, size);
+            glassGrad.addColorStop(0, 'rgba(255,255,255,0.45)');
+            glassGrad.addColorStop(0.4, 'rgba(255,255,255,0.05)');
+            glassGrad.addColorStop(1, 'rgba(255,255,255,0.25)');
+            ctx.fillStyle = glassGrad;
+            ctx.fill();
+            ctx.restore();
+
+            ctx.lineWidth = isCenter ? 7 : 4;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+            drawHeart(ctx, 26, 26, size - 52, size - 52);
+            ctx.stroke();
+
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function loadImageSafely(url, callback) {
+            const img = new Image();
+            if (url.startsWith('http')) { img.crossOrigin = "Anonymous"; }
+            img.onload = () => callback(img);
+            img.onerror = () => {
+                const fallbackCanvas = document.createElement('canvas');
+                fallbackCanvas.width = 400; fallbackCanvas.height = 400;
+                const fCtx = fallbackCanvas.getContext('2d');
+                const grad = fCtx.createLinearGradient(0,0,400,400);
+                grad.addColorStop(0, '#ff007f');
+                grad.addColorStop(1, '#00ffff');
+                fCtx.fillStyle = grad;
+                fCtx.fillRect(0,0,400,400);
+                fCtx.fillStyle = '#fff';
+                fCtx.font = 'bold 32px sans-serif';
+                fCtx.textAlign = 'center';
+                fCtx.fillText('💖 HAPPY BIRTHDAY 💖', 200, 200);
+                const fallbackImg = new Image();
+                fallbackImg.src = fallbackCanvas.toDataURL();
+                fallbackImg.onload = () => callback(fallbackImg);
+            };
+            img.src = url;
+        }
+
+        const clickableObjects = [];
+
+        // --- KHUNG GƯƠNG TRUNG TÂM ---
+        let centerMesh = null;
+        loadImageSafely(centerImageUrl, (img) => {
+            const texture = createGlassHeartTexture(img, true);
+            const geometry = new THREE.PlaneGeometry(200, 200);
+            const material = new THREE.MeshStandardMaterial({
+                map: texture,
+                side: THREE.DoubleSide,
+                transparent: true,
+                roughness: 0.1,
+                metalness: 0.3
+            });
+            centerMesh = new THREE.Mesh(geometry, material);
+            scene.add(centerMesh);
+            clickableObjects.push(centerMesh);
+        });
+
+        // --- PHÂN BỔ CÁC KHUNG TRÁI TIM Ở XA ---
+        const photoGroup = new THREE.Group();
+        scene.add(photoGroup);
+
+        function addPhotoGlassMesh(texture, index, total) {
+            const geometry = new THREE.PlaneGeometry(110, 110);
+            const material = new THREE.MeshStandardMaterial({
+                map: texture,
+                side: THREE.DoubleSide,
+                transparent: true,
+                roughness: 0.15,
+                metalness: 0.2
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+
+            const radius = 420 + Math.random() * 1100;
+            const angle = (index / total) * Math.PI * 2 + (Math.random() * 0.4);
+            const heightY = (Math.random() - 0.5) * 1100;
+
+            mesh.position.x = Math.cos(angle) * radius;
+            mesh.position.y = heightY;
+            mesh.position.z = Math.sin(angle) * radius;
+
+            mesh.lookAt(0, mesh.position.y * 0.2, 0);
+
+            mesh.userData = {
+                rotSpeedY: (Math.random() - 0.5) * 0.008,
+                floatSpeed: 0.6 + Math.random() * 1.0,
+                offsetY: Math.random() * Math.PI * 2
+            };
+
+            photoGroup.add(mesh);
+            clickableObjects.push(mesh);
+        }
+
+        imageUrlList.forEach((url, idx) => {
+            loadImageSafely(url, (img) => {
+                const texture = createGlassHeartTexture(img, false);
+                addPhotoGlassMesh(texture, idx, imageUrlList.length);
+            });
+        });
+
+        // --- ICON BÁNH KEM & VŨ TRỤ TRANG TRÍ ---
+        const iconGroup = new THREE.Group();
+        scene.add(iconGroup);
+
+        function createEmojiTexture(emoji) {
+            const eCanvas = document.createElement('canvas');
+            eCanvas.width = 256; eCanvas.height = 256;
+            const eCtx = eCanvas.getContext('2d');
+            eCtx.font = '180px serif';
+            eCtx.textAlign = 'center';
+            eCtx.textBaseline = 'middle';
+            eCtx.fillText(emoji, 128, 128);
+            return new THREE.CanvasTexture(eCanvas);
+        }
+
+        const cakeTexture = createEmojiTexture('🎂');
+        for (let i = 0; i < 28; i++) {
+            const spriteMat = new THREE.SpriteMaterial({ map: cakeTexture, transparent: true });
+            const cakeSprite = new THREE.Sprite(spriteMat);
+            const radius = 400 + Math.random() * 1200;
+            const angle = Math.random() * Math.PI * 2;
+            const heightY = (Math.random() - 0.5) * 1000;
+            cakeSprite.position.set(Math.cos(angle) * radius, heightY, Math.sin(angle) * radius);
+            const cakeSize = 70 + Math.random() * 45;
+            cakeSprite.scale.set(cakeSize, cakeSize, 1);
+            iconGroup.add(cakeSprite);
+        }
+
+        const activeIcons = ['🕯️', '💐', '🌹', '🌸', '🎁', '✨', '💖', '🥂'];
+        for (let i = 0; i < 250; i++) {
+            const randomEmoji = activeIcons[Math.floor(Math.random() * activeIcons.length)];
+            const texture = createEmojiTexture(randomEmoji);
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(spriteMaterial);
+            const radius = 300 + Math.random() * 1600;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos((Math.random() * 2) - 1);
+            sprite.position.x = radius * Math.sin(phi) * Math.cos(theta);
+            sprite.position.y = radius * Math.sin(phi) * Math.sin(theta);
+            sprite.position.z = radius * Math.cos(phi);
+            const scale = 30 + Math.random() * 40;
+            sprite.scale.set(scale, scale, 1);
+            iconGroup.add(sprite);
+        }
+
+        // =========================================================================
+        // ✨ DANH SÁCH TOÀN BỘ CÁC CÂU CHÚC & TỪ KHÓA LƠ LỬNG ✨
+        // =========================================================================
+        const floatingWordsGroup = new THREE.Group();
+        scene.add(floatingWordsGroup);
+
+        const wordsArray = [
+            "Sinh nhật vui vẻ", "Chúc mừng sinh nhật", "Tuổi mới", "Hạnh phúc", "Bình an", 
+            "May mắn", "Thành công", "Lạc quan", "Yêu đời", "Vui vẻ", "Rực rỡ", "Tỏa sáng", 
+            "Nụ cười", "Niềm vui", "Hạnh phúc trọn vẹn", "Bình yên", "An nhiên", "Sức khỏe", 
+            "Khỏe mạnh", "Tràn đầy năng lượng", "Nhiệt huyết", "Đam mê", "Ước mơ", "Khát vọng", 
+            "Hoài bão", "Thành tựu", "Thăng hoa", "Tiến bộ", "Trưởng thành", "Tự tin", "Mạnh mẽ", 
+            "Can đảm", "Kiên trì", "Bản lĩnh", "Tự do", "Yêu thương", "Được yêu thương", 
+            "Được trân trọng", "Ấm áp", "Chân thành", "Tử tế", "May mắn ngập tràn", "Tài lộc", 
+            "Phú quý", "Thuận lợi", "Suôn sẻ", "Vạn sự như ý", "Như ý", "Cát tường", 
+            "Bình an vô sự", "Mọi điều tốt đẹp", "Điều ước thành hiện thực", "Ước gì được nấy", 
+            "Cười thật nhiều", "Hạnh phúc mỗi ngày", "Yêu bản thân", "Tận hưởng tuổi trẻ", 
+            "Thanh xuân rực rỡ", "Tuổi trẻ đáng nhớ", "Kỷ niệm đẹp", "Khoảnh khắc đáng nhớ", 
+            "Khởi đầu mới", "Hành trình mới", "Chặng đường mới", "Cơ hội mới", "Thành công mới", 
+            "Nhiều trải nghiệm", "Nhiều niềm vui", "Nhiều bất ngờ", "Quà thật nhiều", "Hoa thật đẹp", 
+            "Tiệc thật vui", "Cười không ngừng", "Vui hết cỡ", "Chill hết mình", "Sống hết mình", 
+            "Sống trọn vẹn", "Tích cực", "Hứng khởi", "Năng động", "Tươi trẻ", "Rạng rỡ", 
+            "Lung linh", "Lấp lánh", "Tươi sáng", "Đầy sức sống", "Tràn ngập yêu thương", 
+            "Ngập tràn hạnh phúc", "Ngập tràn may mắn", "Phúc lộc đầy nhà", "Công việc thuận lợi", 
+            "Học tập tiến bộ", "Sự nghiệp phát triển", "Tình bạn bền lâu", "Gia đình hạnh phúc", 
+            "Thuận buồm xuôi gió", "Một năm thật đáng nhớ", "Một tuổi mới thật tuyệt", "Tuổi mới thật rực rỡ 🎂🎉✨"
+        ];
+        
+        function createFloatingWordTexture(text) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const colors = ['#00ffff', '#ff007f', '#ff00ff', '#00ffaa', '#ffe600'];
+            ctx.shadowColor = colors[Math.floor(Math.random() * colors.length)]; 
+            ctx.shadowBlur = 18;
+            ctx.font = 'bold 42px "Segoe UI", Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+            
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        const totalWordSprites = 160;
+        for (let i = 0; i < totalWordSprites; i++) {
+            const randomText = wordsArray[i % wordsArray.length];
+            const texture = createFloatingWordTexture(randomText);
+            
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0.95 });
+            const sprite = new THREE.Sprite(spriteMaterial);
+
+            const radius = 300 + Math.random() * 1600;
+            const theta = Math.random() * Math.PI * 2;
+            const phi = Math.acos((Math.random() * 2) - 1);
+
+            sprite.position.x = radius * Math.sin(phi) * Math.cos(theta);
+            sprite.position.y = radius * Math.sin(phi) * Math.sin(theta);
+            sprite.position.z = radius * Math.cos(phi);
+
+            const baseScale = 25 + Math.random() * 20; 
+            sprite.scale.set(baseScale * 8, baseScale, 1);
+
+            floatingWordsGroup.add(sprite);
+        }
+
+        // --- XỬ LÝ SỰ KIỆN CLICK PHÓNG TO TRÁI TIM & KÍCH HOẠT ÂM THANH ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let isFocused = false;
+
+        window.addEventListener('click', (event) => {
+            // Tự động phát nhạc & phát hiệu ứng click
+            startMusicOnFirstInteraction();
+            playClickSound();
+
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(clickableObjects);
+
+            if (intersects.length > 0) {
+                const targetMesh = intersects[0].object;
+                zoomToMesh(targetMesh);
+            } else {
+                if (isFocused) {
+                    resetCameraPosition();
+                }
+            }
+        });
+
+        function zoomToMesh(mesh) {
+            isFocused = true;
+            controls.enabled = false;
+
+            const worldPos = new THREE.Vector3();
+            mesh.getWorldPosition(worldPos);
+
+            const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.quaternion);
+            const targetCamPos = worldPos.clone().add(normal.multiplyScalar(190));
+
+            gsap.to(camera.position, {
+                x: targetCamPos.x,
+                y: targetCamPos.y,
+                z: targetCamPos.z,
+                duration: 1.6,
+                ease: "power3.inOut"
+            });
+
+            gsap.to(controls.target, {
+                x: worldPos.x,
+                y: worldPos.y,
+                z: worldPos.z,
+                duration: 1.6,
+                ease: "power3.inOut",
+                onUpdate: () => controls.update(),
+                onComplete: () => {
+                    controls.enabled = true;
+                }
+            });
+        }
+
+        function resetCameraPosition() {
+            isFocused = false;
+            controls.enabled = false;
+
+            gsap.to(camera.position, {
+                x: defaultCamPos.x,
+                y: defaultCamPos.y,
+                z: defaultCamPos.z,
+                duration: 1.8,
+                ease: "power3.inOut"
+            });
+
+            gsap.to(controls.target, {
+                x: defaultTarget.x,
+                y: defaultTarget.y,
+                z: defaultTarget.z,
+                duration: 1.8,
+                ease: "power3.inOut",
+                onUpdate: () => controls.update(),
+                onComplete: () => {
+                    controls.enabled = true;
+                }
+            });
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- VÒNG LẶP ANIMATION ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const elapsedTime = clock.getElapsedTime();
+
+            controls.update();
+
+            starField.rotation.y = elapsedTime * 0.008;
+            neonCurvesGroup.rotation.y = elapsedTime * 0.12;
+            textOrbitGroup.rotation.y = elapsedTime * 0.22;
+
+            if (centerMesh && !isFocused) {
+                centerMesh.rotation.y = Math.sin(elapsedTime * 0.4) * 0.2;
+                centerMesh.position.y = Math.sin(elapsedTime * 1.5) * 6;
+            }
+
+            photoGroup.children.forEach(mesh => {
+                if (!isFocused) {
+                    mesh.rotation.y += mesh.userData.rotSpeedY;
+                }
+                mesh.position.y += Math.sin(elapsedTime * mesh.userData.floatSpeed + mesh.userData.offsetY) * 0.22;
+            });
+
+            iconGroup.children.forEach(sprite => {
+                sprite.position.y += Math.sin(elapsedTime + sprite.position.x) * 0.1;
+            });
+
+            floatingWordsGroup.children.forEach(sprite => {
+                sprite.position.y += Math.sin(elapsedTime * 0.8 + sprite.position.x) * 0.15;
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
